@@ -22,8 +22,8 @@
       b.classList.toggle('is-done',done);
     });
     if(step<0){
-      const a=day===4?'11:30':day===5?'7:45':'7:30';
-      const meridian=(day===4||day===6)?'AM':'PM';
+      const a=day===4?'11:30':day===5?'6:15':'7:30';
+      const meridian=(day===4||day===6)?'AM':'PM'; // example times only: in the app each user sets their own
       screen.innerHTML=`<div class="lock" data-accent="${day>=4?'fest':'normal'}"><div class="orb" aria-hidden="true"></div><div class="mini">${lockIcon} Reminder preview</div><div class="clock" aria-hidden="true">${a}<span>${meridian}</span></div><p class="lock-date">${ls[day]}, ${d.date}</p><div class="noticewrap"><button type="button" class="notice" data-act="open"><span class="notice-head"><img src="mark.svg" alt=""> Two Today <span>now</span></span><span class="notice-q">${esc(d.cards[0].question)}</span><span class="notice-sub">Two halachot · Tap to read <b aria-hidden="true">→</b></span></button><p class="timing">${esc(d.note)}</p><div class="homebar" aria-hidden="true"></div></div></div>`;
       if(focus) screen.querySelector('.notice').focus({preventScroll:true});
       return;
@@ -35,7 +35,7 @@
     }
     const c=d.cards[step];
     const p=day===5?'lilac':day===4||step===1?'warm':'green';
-    screen.innerHTML=`<section class="study" data-palette="${p}"><header class="card-head"><span class="mini">${d.date} · ${esc(d.theme)}</span><button class="return" data-act="reset" type="button">Reminder</button></header><article class="card">${art(step)}<h2 class="q" tabindex="-1">${esc(c.question)}</h2><p class="answer">${esc(c.answer)}</p><div class="source"><a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">Read the source · ${esc(c.ref)} ↗</a>${c.extra?`<a href="${esc(c.extra)}" target="_blank" rel="noopener noreferrer">Shamash source ↗</a>`:''}</div></article><footer class="controls"><div><div class="dots" aria-hidden="true"><span aria-current="${step===0}"></span><span aria-current="${step===1}"></span></div><div class="count">${step+1} / 2${step===0?' · swipe left':''}</div></div><div class="actions">${step===1?'<button class="ghost" type="button" data-act="back" aria-label="Previous card">Back</button>':''}<button type="button" class="primary" data-act="next">${step===0?'Next'+arrow:'Done ✓'}</button></div></footer></section>`;
+    screen.innerHTML=`<section class="study" data-palette="${p}"><header class="card-head"><span class="mini">${d.date} · ${esc(d.theme)}</span><button class="return" data-act="reset" type="button">Reminder</button></header><article class="card">${art(step)}<h2 class="q" tabindex="-1">${esc(c.question)}</h2><p class="answer">${esc(c.answer)}</p><div class="source"><a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">Yalkut Yosef · ${esc(c.ref)} ↗</a>${c.extra?`<a href="${esc(c.extra)}" target="_blank" rel="noopener noreferrer">and ${esc(c.extraRef||'more')} ↗</a>`:''}</div></article><footer class="controls"><div><div class="dots" aria-hidden="true"><span aria-current="${step===0}"></span><span aria-current="${step===1}"></span></div><div class="count">${step+1} / 2${step===0?' · swipe left':''}</div></div><div class="actions">${step===1?'<button class="ghost" type="button" data-act="back" aria-label="Previous card">Back</button>':''}<button type="button" class="primary" data-act="next">${step===0?'Next'+arrow:'Done ✓'}</button></div></footer></section>`;
     if(focus) screen.querySelector('.q').focus({preventScroll:true});
   }
   function choose(i){day=i;step=-1;touch=null;render();}
