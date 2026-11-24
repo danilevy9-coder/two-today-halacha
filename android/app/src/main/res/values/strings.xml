@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Two Today</string>
+    <string name="channel">Daily reminder</string>
+    <string name="widget_about">Today\'s first question</string>
+</resources>

@@ -1,0 +1,11 @@
+<resources>
+    <style name="App" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:colorAccent">@color/lime</item>
+    </style>
+    <color name="bg">#101A17</color>
+    <color name="lime">#DAFA89</color>
+    <color name="ink">#F1F4E9</color>
+</resources>

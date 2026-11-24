@@ -1,0 +1,35 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.twotoday.app'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'com.twotoday.app'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+    buildFeatures { buildConfig true }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    // The signing key is never in the repo. Build with: gradle assembleRelease -PTT_STORE=/path/twotoday.jks -PTT_PASS=...
+    signingConfigs {
+        release {
+            if (project.hasProperty('TT_STORE')) {
+                storeFile file(TT_STORE); storePassword TT_PASS; keyAlias 'twotoday'; keyPassword TT_PASS
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release } }
+    // The screens and the cards are the web files in the repo root, copied in as assets.
+    sourceSets { main { assets.srcDirs += layout.buildDirectory.dir('web') } }
+    lint { abortOnError false }
+}
+
+tasks.register('copyWeb', Copy) {
+    from(rootProject.file('..')) { include 'index.html', 'app.js', 'styles.css', 'mark.svg', 'content.txt' }
+    into layout.buildDirectory.dir('web')
+}
+preBuild.dependsOn copyWeb
+
+dependencies { testImplementation 'junit:junit:4.13.2' }
