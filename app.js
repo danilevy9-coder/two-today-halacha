@@ -22,7 +22,7 @@
     for (const l of text.split('\n').slice(1)) if (l) lines.set(l.slice(0, 10), l);
   } catch (e) {}
   if (!lines.size) {
-    app.innerHTML = '<div class="full"><div class="center"><h1>Could not load the cards.</h1><p>Please close Two Today and open it again.</p></div></div>';
+    app.innerHTML = '<div class="center"><h1>Could not load the cards.</h1><p>Please close Two Today and open it again.</p></div>';
     return;
   }
   const dates = [...lines.keys()], FIRST = dates[0], LAST = dates[dates.length - 1];
@@ -35,15 +35,14 @@
 
   // Dates are plain local calendar dates, "YYYY-MM-DD".
   const pad = (n) => String(n).padStart(2, '0');
-  const today = () => {
-    const forced = new URLSearchParams(location.search).get('date'); // for previews in a browser
-    const d = new Date();
-    return forced || `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  };
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = () => new URLSearchParams(location.search).get('date') || iso(new Date()); // ?date= is for previews in a browser
   const asDate = (s) => new Date(s + 'T12:00:00');
   const nice = (s) => asDate(s).toLocaleDateString('en-GB', {
     weekday: 'short', day: 'numeric', month: 'short', year: s.slice(0, 4) === today().slice(0, 4) ? undefined : 'numeric',
   });
+  const short = (s) => asDate(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  if (!store.get('since')) store.set('since', today()); // first day of use: earlier days are not "missed"
 
   const PATHS = {
     back: '<path d="M15 5l-7 7 7 7"/>',
@@ -52,14 +51,28 @@
     share: '<path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/>',
     settings: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
   };
-  const ico = (name, filled) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name]}</svg>`;
+  const ico = (name, filled) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name]}</svg>`;
   const BACK = `<button class="icon" data-act="back" aria-label="Back">${ico('back')}</button>`;
-  const NAV = `<a class="icon" href="#past" aria-label="Past days">${ico('list')}</a><a class="icon" href="#favs" aria-label="Favourites">${ico('star')}</a><a class="icon" href="#settings" aria-label="Settings">${ico('settings')}</a>`;
-  const BRAND = '<span class="brand"><img src="mark.svg" alt="">Two Today</span>';
 
-  if (!store.get('since')) store.set('since', today()); // first day of use: earlier days are not "missed"
+  // The little picture on each card, chosen by topic.
+  const ART = {
+    flame: '<path d="M48 10c6 11 13 16 13 25a13 13 0 1 1-26 0c0-8 6-12 13-25z"/><path d="M48 27c4 6 7 9 7 13a7 7 0 1 1-14 0c0-4 4-8 7-13z" fill="#f8f0d3"/>',
+    cup: '<path d="M38 14h20v9a10 10 0 0 1-20 0zM48 33v13M40 47h16"/>',
+    book: '<path d="M48 19c-5-4-12-4-17-2v27c5-2 12-2 17 2 5-4 12-4 17-2V17c-5-2-12-2-17 2zM48 19v27"/>',
+    home: '<path d="M31 31l17-15 17 15M36 28v19h24V28M45 47V37h6v10"/>',
+    people: '<circle cx="40" cy="23" r="6"/><circle cx="57" cy="23" r="6"/><path d="M28 47c1-9 6-12 12-12 4 0 6 2 8 4 2-2 4-4 9-4 6 0 11 3 12 12"/>',
+    spark: '<path d="M48 11l4 15 15 5-15 5-4 15-4-15-15-5 15-5z"/>',
+  };
+  function art(topic) {
+    const name = /Chanukah|Shabbat|Women/.test(topic) ? 'flame' : /Brachot|Pesach|Purim|Bishvat/.test(topic) ? 'cup'
+      : /Home|Sukkah|Shmita|Lulav|Eruv/.test(topic) ? 'home' : /people/.test(topic) ? 'people'
+      : /Tefilla|Elul|Rosh|Kippur|Levana|Omer|Fast|Tisha|Weeks|Shavuot|Tal|Morid/.test(topic) ? 'book' : 'spark';
+    return `<span class="art" aria-hidden="true"><svg viewBox="0 0 96 62" fill="none" stroke="#21372b" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><rect width="96" height="62" rx="14" stroke="none"/><path d="M12 31h72" stroke-opacity=".3" stroke-dasharray="2 4"/>${ART[name]}</svg></span>`;
+  }
 
-  let current = null; // the card on screen, for swipe, share and favourite
+  let current = null; // the top card: { date, step, key, card }
+  let shown = null;   // the last card drawn, to know how the next one should arrive
+  let busy = false;   // a card is flying off
 
   // ---- screens
   function route() {
@@ -69,7 +82,7 @@
     if (h === 'favs') return favourites();
     if (h === 'settings') return settings();
     const m = h.match(/^d\/(\d{4}-\d\d-\d\d)\/([012])$/);
-    if (m && lines.has(m[1]) && (m[1] <= t || m[1] === FIRST)) return showDay(m[1], +m[2], false);
+    if (m && lines.has(m[1]) && (m[1] <= t || m[1] === FIRST)) return showDay(m[1], +m[2]);
     if (h) return void location.replace('#');
     home();
   }
@@ -80,44 +93,69 @@
     if (t < FIRST) return message(`Two Today begins ${nice(FIRST)}.`, 'Two short halachot every day, matched to the Jewish calendar.', `<a class="primary" href="#d/${FIRST}/0">Preview the first day</a>`);
     if (t > LAST) return message('You have reached the end.', 'Five years of Two Today are complete. Update the app for more.', '<a class="primary" href="#past">Past days</a>');
     if (!lines.has(t)) return message(asDate(t).getDay() === 6 ? 'Shabbat shalom.' : 'No cards today.', 'Two Today rests on Shabbat and Yom Tov.', '<a class="primary" href="#past">Past days</a>');
-    showDay(t, done.has(t) ? 2 : 0, true);
+    showDay(t, done.has(t) ? 2 : 0);
+  }
+
+  // Top of the main screen: name, shortcuts, and this week's days with a tick on the ones done.
+  function chrome(date, label) {
+    const t = today(), sel = asDate(date), d = getDay(date);
+    let strip = '';
+    for (let k = 0; k < 7; k++) {
+      const x = new Date(sel); x.setDate(sel.getDate() - sel.getDay() + k);
+      const s = iso(x), open = lines.has(s) && (s <= t || s === FIRST), isDone = done.has(s);
+      strip += `<a ${open ? `href="#${s === t ? '' : `d/${s}/0`}"` : 'aria-disabled="true"'} class="${isDone ? 'is-done' : ''}"${s === date ? ' aria-current="true"' : ''}>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][k]}<strong>${x.getDate()}${isDone ? '<i>✓</i>' : ''}</strong></a>`;
+    }
+    return `<header class="mast"><a class="brand" href="#"><img src="mark.svg" alt=""><span>Two Today<small>DAILY HALACHA</small></span></a>
+        <a class="icon" href="#past" aria-label="Past days">${ico('list')}</a><a class="icon" href="#favs" aria-label="Favourites">${ico('star')}</a><a class="icon" href="#settings" aria-label="Settings">${ico('settings')}</a></header>
+      <p class="eyebrow"><span>${esc(label || (d ? d.occ : ''))}</span><bdi>${d ? esc(d.heb) : ''}</bdi></p><nav class="days" aria-label="This week">${strip}</nav>`;
   }
 
   function message(title, sub, actions) {
-    app.innerHTML = `<div class="full"><header class="bar">${BRAND}${NAV}</header><div class="center"><h1>${esc(title)}</h1><p>${esc(sub)}</p>${actions}</div></div>`;
+    shown = null;
+    app.innerHTML = `${chrome(today(), 'Two Today')}<div class="deck"><section class="card done top"><div class="finish"><h2 class="done-title">${esc(title)}</h2><p>${esc(sub)}</p>${actions}</div></section></div>`;
   }
 
   function welcome() {
-    app.innerHTML = `<div class="full"><div class="center"><img src="mark.svg" width="64" height="64" alt=""><h1>Two halachot a day.</h1><p>Short, practical and Sefardi, matched to the Jewish calendar. When should we remind you?</p><input type="time" id="time" value="07:30" aria-label="Reminder time"><button class="primary" data-act="start">Remind me daily</button><button class="link" data-act="skip">Not now</button></div></div>`;
+    app.innerHTML = `<div class="center"><img src="mark.svg" width="64" height="64" alt=""><h1>Two halachot a day.</h1><p>Short, practical and Sefardi, matched to the Jewish calendar. When should we remind you?</p><input type="time" id="time" value="07:30" aria-label="Reminder time"><button class="primary" data-act="start">Remind me daily</button><button class="link" data-act="skip">Not now</button></div>`;
   }
 
-  function showDay(date, step, isHome) {
-    const d = getDay(date), t = today();
-    const head = `<header class="bar">${isHome ? '' : BACK}<p class="mini">${esc(nice(date))}${date === t ? ' · today' : ''}<span class="heb"><bdi>${esc(d.heb)}</bdi></span></p>${isHome ? NAV : ''}</header>`;
-    if (step === 2) {
-      if (date <= t && !done.has(date)) { done.add(date); save('done', done); }
-      const weekAgo = new Date(asDate(t) - 7.5 * 864e5), since = store.get('since');
-      const missed = dates.filter((x) => x < t && x >= since && asDate(x) >= weekAgo && !done.has(x)).length;
-      const title = date === t ? 'Done for today.' : date > t ? `See you on ${nice(date)}.` : 'Done.';
-      app.innerHTML = `<div class="full">${head}<div class="center"><span class="badge" aria-hidden="true">✓</span><h1>${esc(title)}</h1><p>Two halachot learned.</p>${missed ? `<a class="primary" href="#past">Catch up on ${missed} missed day${missed > 1 ? 's' : ''}</a>` : ''}<a class="link" href="#d/${date}/0">Read again</a></div></div>`;
-      return;
-    }
-    const c = d.cards[step], key = `${date}/${step}`, saved = favs.has(key);
-    current = { date, step, key, card: c };
-    app.innerHTML = `<section class="study" data-p="${step}">${head}
-      <article class="card"><p class="mini topic">${esc(c.topic)}${d.occ === 'Year-round' || d.occ === c.topic ? '' : ' · ' + esc(d.occ)}</p>
-        <h2 class="q">${esc(c.q)}</h2><p class="answer">${esc(c.a)}</p>
+  function cardHTML(date, d, i, cls) {
+    const c = d.cards[i], saved = favs.has(`${date}/${i}`), n = c.q.length;
+    return `<article class="card ${cls}" data-p="${i}"${cls.startsWith('top') ? '' : ' aria-hidden="true"'}>
+      <header class="card-head"><span class="mini">${esc(short(date))} · ${esc(c.topic)}</span>
+        <button class="pill" data-act="fav" aria-pressed="${saved}" aria-label="Save to favourites">${ico('star', saved)}</button>
+        <button class="pill" data-act="share" aria-label="Share this card">${ico('share')}</button></header>
+      <div class="body">${art(c.topic)}<h2 class="q${n > 85 ? ' xs' : n > 50 ? ' sm' : ''}">${esc(c.q)}</h2><p class="answer">${esc(c.a)}</p>
         <p class="source"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.ref)} ↗</a></p>
-        <p class="legal">A short summary. For a ruling in your own case, ask your rav.</p></article>
-      <footer class="controls"><span class="dots"><i class="${step ? '' : 'on'}"></i><i class="${step ? 'on' : ''}"></i></span>
-        <button class="icon" data-act="fav" aria-pressed="${saved}" aria-label="Save to favourites">${ico('star', saved)}</button>
-        <button class="icon" data-act="share" aria-label="Share this card">${ico('share')}</button>
-        <a class="primary" href="#d/${date}/${step + 1}">${step ? 'Done' : 'Next'}</a></footer></section>`;
+        <p class="legal">A short summary. For a ruling in your own case, ask your rav.</p></div>
+      <footer class="controls"><div><div class="dots"><span${i ? '' : ' class="on"'}></span><span${i ? ' class="on"' : ''}></span></div><div class="count">${i + 1} / 2 · swipe</div></div>
+        <div class="actions">${i ? '<button class="ghost" data-act="prev">Back</button>' : ''}<button class="primary" data-act="next">${i ? 'Done' : 'Next'} →</button></div></footer></article>`;
+  }
+
+  function doneHTML(date, cls) {
+    const t = today(), weekAgo = new Date(asDate(t) - 7.5 * 864e5), since = store.get('since');
+    const missed = dates.filter((x) => x < t && x >= since && asDate(x) >= weekAgo && !done.has(x)).length;
+    const title = date === t ? 'Done for today.' : date > t ? `See you on ${nice(date)}.` : 'Done.';
+    return `<section class="card done ${cls}"${cls === 'top' ? '' : ' aria-hidden="true"'}><div class="finish"><span class="done-badge" aria-hidden="true">✓</span><p class="mini">${esc(short(date))} · 2 of 2</p><h2 class="done-title">${esc(title)}</h2><p>Two halachot learned. That’s it.</p>${missed ? `<a class="primary" href="#past">Catch up on ${missed} missed day${missed > 1 ? 's' : ''}</a>` : ''}<a class="link" href="#d/${date}/0">Read again</a></div></section>`;
+  }
+
+  // A day is a stack: card 1 on top, card 2 under it, "Done" at the bottom. `step` is how many have been swiped away.
+  function showDay(date, step) {
+    const d = getDay(date), prev = shown;
+    shown = { date, step };
+    if (step === 2 && date <= today() && !done.has(date)) { done.add(date); save('done', done); }
+    // A new day is dealt in; a card that was swiped away comes back from the side; the next card is already in place.
+    const arrive = !prev || prev.date !== date ? ' deal' : prev.step > step ? ' return' : '';
+    const layers = [doneHTML(date, step === 2 ? 'top' : step === 1 ? 'under' : 'hidden')];
+    if (step <= 1) layers.push(cardHTML(date, d, 1, step === 1 ? 'top' + arrive : 'under'));
+    if (step === 0) layers.push(cardHTML(date, d, 0, 'top' + arrive));
+    current = step < 2 ? { date, step, key: `${date}/${step}`, card: d.cards[step] } : null;
+    app.innerHTML = `${chrome(date)}<div class="deck">${layers.join('')}</div>`;
     scrollTo(0, 0);
   }
 
   function page(title, body) {
-    app.innerHTML = `<header class="bar">${BACK}<span class="brand"></span></header><div class="page"><h1>${title}</h1>${body}</div>`;
+    app.innerHTML = `<header class="mast">${BACK}</header><div class="page"><h1>${title}</h1>${body}</div>`;
   }
   const row = (date, i, q, ticked) => `<a class="row${ticked ? ' done' : ''}" href="#d/${date}/${i}"><span><span class="mini">${esc(nice(date))}</span><b>${esc(q)}</b></span><span class="tick">${ticked ? '✓' : ''}</span></a>`;
 
@@ -164,11 +202,62 @@
   }
   const goBack = () => (history.length > 1 ? history.back() : location.replace('#'));
 
+  // Throw the top card off to one side (dir -1 left, 1 right), then show what was under it.
+  function fling(dir, dy) {
+    const card = app.querySelector('.card.top');
+    if (!current || busy || !card) return;
+    const { date, step } = current;
+    busy = true;
+    card.style.transition = 'transform .28s ease-in';
+    card.style.transform = `translate(${dir * 150}vw, ${dy || 0}px) rotate(${dir * 24}deg)`;
+    card.parentElement.classList.add('settle');
+    card.parentElement.style.setProperty('--p', 1);
+    setTimeout(() => { busy = false; location.hash = `d/${date}/${step + 1}`; }, 250);
+  }
+
+  // Drag the top card with a finger or the mouse; it follows and tilts. Let go far enough, or flick, and it flies off.
+  let drag = null, dragEnded = 0;
+  app.addEventListener('pointerdown', (e) => {
+    const card = e.target.closest('.card.top:not(.done)');
+    drag = card && !busy && e.button < 1 ? { card, id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, at: performance.now(), moving: false } : null;
+  });
+  app.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moving) {
+      if (Math.abs(dx) < 8) return;
+      drag.moving = true; drag.card.style.transition = 'none';
+      try { drag.card.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    drag.dx = dx; drag.dy = dy;
+    drag.card.style.transform = `translate(${dx}px, ${dy * 0.4}px) rotate(${dx / 18}deg)`;
+    drag.card.parentElement.style.setProperty('--p', Math.min(1, Math.abs(dx) / 140));
+  });
+  function release(e) {
+    const d = drag;
+    if (!d || e.pointerId !== d.id) return;
+    drag = null;
+    if (!d.moving) return;
+    dragEnded = performance.now();
+    const speed = Math.abs(d.dx) / (performance.now() - d.at); // px per ms
+    if (e.type === 'pointerup' && (Math.abs(d.dx) > 90 || (Math.abs(d.dx) > 30 && speed > 0.6))) return fling(d.dx < 0 ? -1 : 1, d.dy * 0.4);
+    d.card.style.transition = 'transform .3s cubic-bezier(.2,1.4,.4,1)';
+    d.card.style.transform = '';
+    d.card.parentElement.classList.add('settle');
+    d.card.parentElement.style.setProperty('--p', 0);
+    setTimeout(() => d.card.parentElement.classList.remove('settle'), 300);
+  }
+  app.addEventListener('pointerup', release);
+  app.addEventListener('pointercancel', release);
+
   app.addEventListener('click', (e) => {
+    if (performance.now() - dragEnded < 350) { e.preventDefault(); return; } // the end of a drag is not a tap
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const act = b.dataset.act, time = () => document.querySelector('#time').value || '07:30';
     if (act === 'back') goBack();
+    else if (act === 'next') fling(-1);
+    else if (act === 'prev') goBack();
     else if (act === 'more') past(+b.dataset.n);
     else if (act === 'share') share();
     else if (act === 'battery') A.battery();
@@ -176,24 +265,12 @@
     else if (act === 'notif') A.notificationSettings();
     else if (act === 'fav') {
       if (!favs.delete(current.key)) favs.add(current.key);
-      save('favs', favs); showDay(current.date, current.step, !location.hash);
+      save('favs', favs);
+      b.setAttribute('aria-pressed', favs.has(current.key)); b.innerHTML = ico('star', favs.has(current.key));
     } else if (act === 'toggle') { setReminder(store.get('reminder') ? '' : time()); settings(); }
     else if (act === 'start' || act === 'skip') { if (act === 'start') setReminder(time()); store.set('seen', '1'); route(); }
   });
   app.addEventListener('change', (e) => { if (e.target.id === 'time' && store.get('reminder')) setReminder(e.target.value || '07:30'); });
-
-  // Swipe sideways between the two cards (a mostly vertical move is a scroll, not a swipe).
-  let x0 = null, y0 = 0;
-  app.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; } else x0 = null;
-  }, { passive: true });
-  app.addEventListener('touchend', (e) => {
-    if (x0 === null || !current) return;
-    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return;
-    if (dx < 0) location.hash = `d/${current.date}/${current.step + 1}`;
-    else if (current.step) goBack();
-  }, { passive: true });
 
   addEventListener('hashchange', route);
   // Coming back to the app (also called by the Android shell): show the new day, or the result of a permission prompt.
