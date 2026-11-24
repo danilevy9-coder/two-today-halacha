@@ -209,14 +209,21 @@
     const r = store.get('reminder');
     let body;
     if (A) {
-      const blocked = r && !A.notificationsAllowed();
+      const blocked = r && !A.notificationsAllowed(), next = r && A.nextReminder(); // "2026-12-01T07:30"
       body = `<section class="set"><h2>Daily reminder</h2>
         <p>One reminder a day. None on Shabbat or Yom Tov; on Friday and Erev Yom Tov a late reminder comes at 1:00 pm instead.</p>
         <div class="line"><input type="time" id="time" value="${esc(r || '07:30')}" aria-label="Reminder time"><button class="switch" role="switch" data-act="toggle" aria-checked="${r ? 'true' : 'false'}" aria-label="Daily reminder"></button></div>
+        ${next ? `<p>Next reminder: <b>${esc(nice(next.slice(0, 10)))} at ${esc(next.slice(11, 16))}</b>${next.slice(0, 10) > today() && today() < FIRST ? ', when the cards begin' : ''}.</p>` : ''}
         ${blocked ? '<p>Notifications are switched off for Two Today.</p><button class="primary" data-act="notif">Turn notifications on</button>' : ''}
         ${r && !A.exactAllowed() ? '<p>Your phone may deliver the reminder up to an hour late.</p><button class="primary" data-act="exact">Allow on-time reminders</button>' : ''}
+        <button class="ghost" data-act="test">Send a test reminder</button>
         <button class="ghost" data-act="battery">Reminders not arriving?</button></section>`;
-      if (+store.get('latestApp') > A.version()) body = `<section class="set"><h2>A new version is ready</h2><a class="primary" href="${APK}" target="_blank" rel="noopener">Download the update</a></section>` + body;
+      const newApp = +store.get('latestApp') > A.version(), note = store.get('note');
+      store.set('note', '');
+      body += `<section class="set"><h2>Updates</h2>
+        <p>App version ${esc(A.versionName())} · cards version ${A.contentVersion()}. Corrected cards arrive by themselves once a day.</p>
+        ${newApp ? `<p><b>A new app version is ready.</b> Download it and tap Install; your settings and progress stay.</p><a class="primary" href="${APK}" target="_blank" rel="noopener">Download the update</a>` : ''}
+        <button class="ghost" data-act="update">Check for updates</button>${note ? `<p><b>${esc(note)}</b></p>` : ''}</section>`;
     } else {
       body = `<section class="set"><h2>Get the Android app</h2><p>A daily reminder at the time you choose, and a home-screen widget.</p><a class="primary" href="${APK}">Download for Android</a></section>`;
     }
@@ -297,6 +304,8 @@
     else if (act === 'more') past(+b.dataset.n);
     else if (act === 'share') share();
     else if (act === 'battery') A.battery();
+    else if (act === 'update') { b.textContent = 'Checking…'; b.disabled = true; A.checkUpdates(); }
+    else if (act === 'test') { A.testReminder(); toast('A test reminder arrives in about 10 seconds'); }
     else if (act === 'exact') A.allowExact();
     else if (act === 'notif') A.notificationSettings();
     else if (act === 'fav') {
@@ -314,6 +323,14 @@
     if (e.key === 'ArrowRight') fling(-1);
     else if (e.key === 'ArrowLeft' && current.step) goBack();
   });
+
+  // The Android shell reports back after "Check for updates": 'cards' (newer cards downloaded), 'same' or 'error'.
+  window.onUpdateChecked = (outcome) => {
+    const newApp = +store.get('latestApp') > A.version();
+    store.set('note', outcome === 'error' ? 'Could not check. Is the phone online?' : outcome === 'cards' ? 'New cards downloaded.' : newApp ? '' : 'Everything is up to date.');
+    if (outcome === 'cards') location.reload(); // load the new cards straight away
+    else if (location.hash === '#settings') settings();
+  };
 
   addEventListener('hashchange', route);
   // Coming back to the app (also called by the Android shell): show the new day, or the result of a permission prompt.

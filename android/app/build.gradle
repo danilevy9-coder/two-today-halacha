@@ -7,8 +7,8 @@ android {
         applicationId 'com.twotoday.app'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '1.5'
+        versionCode 7
+        versionName '1.6'
     }
     buildFeatures { buildConfig true }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -24,6 +24,7 @@ android {
     // The screens and the cards are the web files in the repo root, copied in as assets.
     sourceSets { main { assets.srcDirs += layout.buildDirectory.dir('web') } }
     lint { abortOnError false }
+    testOptions { unitTests { includeAndroidResources = true } } // tests read the real cards
 }
 
 tasks.register('copyWeb', Copy) {
@@ -32,4 +33,7 @@ tasks.register('copyWeb', Copy) {
 }
 preBuild.dependsOn copyWeb
 
-dependencies { testImplementation 'junit:junit:4.13.2' }
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.18.1' // runs the Android parts of the tests on a computer
+}

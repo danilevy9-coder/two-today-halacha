@@ -27,6 +27,7 @@ public class MainActivity extends Activity {
     /** A made-up address: every request under it is answered from the app's own files, never the network. */
     static final String HOME = "https://app.twotoday/";
     WebView web;
+    boolean testWaiting; // a test reminder is waiting for the notification permission
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -99,6 +100,18 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
+        boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+        if (granted && testWaiting) Reminder.test(this);
+        testWaiting = false;
+    }
+
+    /** True when the notification permission still has to be asked for (Android 13 and later). */
+    boolean mustAsk() {
+        return Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
     public void onBackPressed() {
         if (web.canGoBack()) web.goBack();
         else super.onBackPressed();
@@ -122,11 +135,28 @@ public class MainActivity extends Activity {
         public void setReminder(String time) {
             set("reminder", time);
             runOnUiThread(() -> {
-                if (!time.isEmpty() && Build.VERSION.SDK_INT >= 33
-                        && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
-                }
+                if (!time.isEmpty() && mustAsk()) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
                 Reminder.schedule(MainActivity.this);
+            });
+        }
+
+        /** When the next reminder is due, as "2026-12-01T07:30", or "" when there is none. */
+        @JavascriptInterface
+        public String nextReminder() {
+            java.time.LocalDateTime next = Reminder.nextTime(MainActivity.this);
+            return next == null ? "" : next.toString();
+        }
+
+        /** Sends a sample reminder in ten seconds, asking for the notification permission first if needed. */
+        @JavascriptInterface
+        public void testReminder() {
+            runOnUiThread(() -> {
+                if (mustAsk()) {
+                    testWaiting = true;
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
+                } else {
+                    Reminder.test(MainActivity.this);
+                }
             });
         }
 
@@ -170,6 +200,23 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public int version() {
             return BuildConfig.VERSION_CODE;
+        }
+
+        @JavascriptInterface
+        public String versionName() {
+            return BuildConfig.VERSION_NAME;
+        }
+
+        @JavascriptInterface
+        public int contentVersion() {
+            return Content.version(MainActivity.this);
+        }
+
+        /** "Check for updates": looks now, then tells the page the outcome ("cards", "same" or "error"). */
+        @JavascriptInterface
+        public void checkUpdates() {
+            Updater.run(MainActivity.this, outcome -> runOnUiThread(() ->
+                    web.evaluateJavascript("window.onUpdateChecked && onUpdateChecked('" + outcome + "')", null)));
         }
     }
 }
