@@ -2,7 +2,7 @@
 // Two Today: the whole app. Runs inside the Android shell (window.Android is its bridge) and in a plain browser.
 (async () => {
   const A = window.Android || null;
-  const APK = 'https://two-today-halacha.vercel.app/two-today.apk';
+  const SITE = 'https://two-today-halacha.vercel.app/', APK = SITE + 'two-today.apk';
   const app = document.querySelector('#app');
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -77,12 +77,12 @@
   // ---- screens
   function route() {
     current = null;
-    const h = location.hash.slice(1), t = today();
+    const h = location.hash.slice(1);
     if (h === 'past') return past(30);
     if (h === 'favs') return favourites();
     if (h === 'settings') return settings();
     const m = h.match(/^d\/(\d{4}-\d\d-\d\d)\/([012])$/);
-    if (m && lines.has(m[1]) && (m[1] <= t || m[1] === FIRST)) return showDay(m[1], +m[2]);
+    if (m && lines.has(m[1])) return showDay(m[1], +m[2]); // any card can be opened by its link, e.g. one that was shared
     if (h) return void location.replace('#');
     home();
   }
@@ -195,7 +195,8 @@
     document.body.append(el); setTimeout(() => el.remove(), 1600);
   }
   function share() {
-    const c = current.card, text = `${c.q}\n\n${c.a}\n\n${c.ref}\n${c.url}\n\nTwo Today: two halachot a day`;
+    // A short link to this card on the Two Today site; the card there carries the link to the source.
+    const c = current.card, text = `${c.q}\n\n${c.a}\n\n${c.ref}\nTwo Today: ${SITE}#d/${current.date}/${current.step}`;
     if (A) A.share(text);
     else if (navigator.share) navigator.share({ text }).catch(() => {});
     else navigator.clipboard.writeText(text).then(() => toast('Copied'));
