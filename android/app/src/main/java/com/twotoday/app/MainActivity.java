@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                if (request.getUrl().toString().startsWith(HOME)) return false;
+                if (!request.isForMainFrame() || request.getUrl().toString().startsWith(HOME)) return false; // hidden frames load in place
                 open(new Intent(Intent.ACTION_VIEW, request.getUrl())); // sources and downloads open in the browser
                 return true;
             }

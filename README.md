@@ -10,6 +10,7 @@ The whole app is three plain files with no build step and no libraries:
 
 - `index.html`, `styles.css`, `app.js`: every screen (today's two cards, done, past days, favourites, settings).
 - `content.txt`: the cards. First line `v<TAB>version`, then one line per day with 13 tab-separated fields: date, Hebrew date, occasion, then topic, heading, answer, reference and link for each of the two cards. Shabbat and Yom Tov have no line, which is how the app knows to stay silent.
+- `n/`: four blank pages (`app-open`, `app-done`, `web-open`, `web-done`). The app loads one unseen, at most once a day each, so Vercel Analytics can count opens and completions. No ids or cookies.
 - `version.txt`: the newest Android `versionCode`. The app shows "A new version is ready" when this is higher than its own.
 
 The Android app (`android/`, plain Java, no libraries) is a thin shell around those same files:

@@ -70,6 +70,16 @@
     return `<span class="art" aria-hidden="true"><svg viewBox="0 0 96 62" fill="none" stroke="#21372b" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><rect width="96" height="62" rx="14" stroke="none"/><path d="M12 31h72" stroke-opacity=".3" stroke-dasharray="2 4"/>${ART[name]}</svg></span>`;
   }
 
+  // Anonymous usage numbers: at most once a day each, load a blank page from the site (n/app-open.html, n/app-done.html,
+  // or web-...) in a hidden frame, where Vercel Analytics counts the visit. Nothing about the person is sent.
+  function count(what) {
+    const day = iso(new Date()), live = A || location.hostname === 'two-today-halacha.vercel.app';
+    if (!live || navigator.webdriver || !navigator.onLine || store.get('n-' + what) === day) return;
+    const frame = Object.assign(document.createElement('iframe'), { hidden: true, src: `${SITE}n/${A ? 'app' : 'web'}-${what}.html` });
+    frame.onload = () => { store.set('n-' + what, day); setTimeout(() => frame.remove(), 8000); };
+    document.body.append(frame);
+  }
+
   let current = null; // the top card: { date, step, key, card }
   let shown = null;   // the last card drawn, to know how the next one should arrive
   let busy = false;   // a card is flying off
@@ -144,6 +154,7 @@
     const d = getDay(date), prev = shown;
     shown = { date, step };
     if (step === 2 && date <= today() && !done.has(date)) { done.add(date); save('done', done); }
+    if (step === 2 && date === today()) count('done');
     // A new day is dealt in; a card that was swiped away comes back from the side; the next card is already in place.
     const arrive = !prev || prev.date !== date ? ' deal' : prev.step > step ? ' return' : '';
     const layers = [doneHTML(date, step === 2 ? 'top' : step === 1 ? 'under' : 'hidden')];
@@ -185,7 +196,7 @@
     } else {
       body = `<section class="set"><h2>Get the Android app</h2><p>A daily reminder at the time you choose, and a home-screen widget.</p><a class="primary" href="${APK}">Download for Android</a></section>`;
     }
-    page('Settings', body + `<section class="set"><h2>About</h2><p>Two short halachot a day for Sefardim, summarised from Yalkut Yosef, with a link to the source on yalkut.info. The days follow the calendar of Eretz Yisrael. These are summaries for learning; for a ruling in your own case, ask your rav.</p></section>`);
+    page('Settings', body + `<section class="set"><h2>About</h2><p>Two short halachot a day for Sefardim, summarised from Yalkut Yosef, with a link to the source on yalkut.info. The days follow the calendar of Eretz Yisrael. These are summaries for learning; for a ruling in your own case, ask your rav.</p><p>Two Today counts how many times a day it is opened and finished. Nothing that identifies you is collected.</p></section>`);
   }
 
   // ---- actions
@@ -277,8 +288,10 @@
   // Coming back to the app (also called by the Android shell): show the new day, or the result of a permission prompt.
   let shownDay = today();
   window.onAppResume = () => {
+    count('open');
     if (location.hash === '#settings' || today() !== shownDay) { shownDay = today(); route(); }
   };
   document.addEventListener('visibilitychange', () => { if (!document.hidden) window.onAppResume(); });
   route();
+  count('open');
 })();
