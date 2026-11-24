@@ -46,6 +46,7 @@
 
   const PATHS = {
     back: '<path d="M15 5l-7 7 7 7"/>',
+    forward: '<path d="M9 5l7 7-7 7"/>',
     list: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     star: '<path d="M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.9 6.6 19.8l1.1-6.1L3.2 9.4l6.1-.8z"/>',
     share: '<path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/>',
@@ -106,18 +107,37 @@
     showDay(t, done.has(t) ? 2 : 0);
   }
 
-  // Top of the main screen: name, shortcuts, and this week's days with a tick on the ones done.
+  // People may look back as far as they like, and ahead to the end of next week (a Shabbat), but no further.
+  function lastOpen() {
+    const d = asDate(today()); d.setDate(d.getDate() - d.getDay() + 13);
+    return iso(d);
+  }
+  // The day to land on in the week before (dir -1) or after (dir 1): the nearest one that has cards and is open.
+  function otherWeek(date, dir) {
+    const base = asDate(date), limit = lastOpen(); base.setDate(base.getDate() + 7 * dir);
+    let best = null;
+    for (let k = 0; k < 7; k++) {
+      const x = new Date(base); x.setDate(base.getDate() - base.getDay() + k);
+      const s = iso(x);
+      if (lines.has(s) && s <= limit && (!best || Math.abs(x - base) < Math.abs(asDate(best) - base))) best = s;
+    }
+    return best;
+  }
+  const dayLink = (s) => `href="#${s === today() ? '' : `d/${s}/0`}"`;
+
+  // Top of the main screen: name, shortcuts, and one week of days with a tick on the ones done.
   function chrome(date, label) {
-    const t = today(), sel = asDate(date), d = getDay(date);
+    const t = today(), sel = asDate(date), d = getDay(date), limit = lastOpen();
     let strip = '';
     for (let k = 0; k < 7; k++) {
       const x = new Date(sel); x.setDate(sel.getDate() - sel.getDay() + k);
-      const s = iso(x), open = lines.has(s) && (s <= t || s === FIRST), isDone = done.has(s);
-      strip += `<a ${open ? `href="#${s === t ? '' : `d/${s}/0`}"` : 'aria-disabled="true"'} class="${isDone ? 'is-done' : ''}"${s === date ? ' aria-current="true"' : ''}>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][k]}<strong>${x.getDate()}${isDone ? '<i>✓</i>' : ''}</strong></a>`;
+      const s = iso(x), open = lines.has(s) && s <= limit, isDone = done.has(s);
+      strip += `<a ${open ? dayLink(s) : 'aria-disabled="true"'} class="${isDone ? 'is-done' : ''}${s === t ? ' today' : ''}"${s === date ? ' aria-current="true"' : ''}>${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Shabbat'][k]}<strong>${x.getDate()}${isDone ? '<i>✓</i>' : ''}</strong></a>`;
     }
+    const week = (dir, name, label) => { const s = otherWeek(date, dir); return `<a class="icon week" ${s ? dayLink(s) : 'aria-disabled="true"'} aria-label="${label}">${ico(name)}</a>`; };
     return `<header class="mast"><a class="brand" href="#"><img src="mark.svg" alt=""><span>Two Today<small>DAILY HALACHA</small></span></a>
         <a class="icon" href="#past" aria-label="Past days">${ico('list')}</a><a class="icon" href="#favs" aria-label="Favourites">${ico('star')}</a><a class="icon" href="#settings" aria-label="Settings">${ico('settings')}</a></header>
-      <p class="eyebrow"><span>${esc(label || (d ? d.occ : ''))}</span><bdi>${d ? esc(d.heb) : ''}</bdi></p><nav class="days" aria-label="This week">${strip}</nav>`;
+      <p class="eyebrow">${week(-1, 'back', 'Previous week')}<span>${esc(label || (d ? d.occ : ''))}</span><bdi>${d ? esc(d.heb) : ''}</bdi>${week(1, 'forward', 'Next week')}</p><nav class="days" aria-label="Days of the week">${strip}</nav>`;
   }
 
   function message(title, sub, actions) {

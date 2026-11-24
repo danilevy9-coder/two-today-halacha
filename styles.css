@@ -17,13 +17,17 @@ button{cursor:pointer}
 .brand small{display:block;margin-top:4px;font:9px/1 var(--mono);letter-spacing:.145em;color:var(--muted)}
 .icon{width:42px;height:42px;border-radius:50%;border:0;background:transparent;color:inherit;display:grid;place-items:center;text-decoration:none}
 .icon:active{background:#fff1}
-.eyebrow{display:flex;justify-content:space-between;gap:10px;margin:10px 16px 8px;color:var(--lime)}
+.eyebrow{display:flex;align-items:center;gap:6px;margin:4px 6px 2px;color:var(--lime)}
+.eyebrow span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.week{width:36px;height:36px;color:var(--ink)}
+.week[aria-disabled]{opacity:.25}
 .eyebrow bdi{font:13px/1.2 system-ui,sans-serif;letter-spacing:0;text-transform:none;color:var(--muted)}
 .days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:0 14px}
-.days a{border:1px solid #45574d;border-radius:10px;color:var(--muted);background:#17221c;min-height:42px;padding:6px 0 4px;font:9px/1 var(--mono);text-transform:uppercase;text-align:center;text-decoration:none}
+.days a{border:1px solid #45574d;border-radius:10px;color:var(--muted);background:#17221c;min-height:42px;padding:6px 0 4px;font:9px/1 var(--mono);letter-spacing:-.02em;text-transform:uppercase;text-align:center;text-decoration:none;overflow:hidden}
 .days strong{display:block;color:#f0f4e7;font:650 15px/1.15 system-ui,sans-serif;margin-top:4px}
 .days i{font-style:normal;font-size:.7em;margin-left:2px;vertical-align:.15em}
 .days a[aria-disabled]{opacity:.38}
+.days a.today{border-color:var(--lime)}
 .days a.is-done{color:#b8efd4;border-color:#53977b;background:#213d34}
 .days a.is-done strong{color:#c8f4de}
 .days a[aria-current]{border-color:var(--lime);background:var(--lime);color:#304523}
