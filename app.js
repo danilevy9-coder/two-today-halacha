@@ -137,15 +137,17 @@
     const week = (dir, name, label) => { const s = otherWeek(date, dir); return `<a class="icon week" ${s ? dayLink(s) : 'aria-disabled="true"'} aria-label="${label}">${ico(name)}</a>`; };
     return `<header class="mast"><a class="brand" href="#"><img src="mark.svg" alt=""><span>Two Today<small>DAILY HALACHA</small></span></a>
         <a class="icon" href="#past" aria-label="Past days">${ico('list')}</a><a class="icon" href="#favs" aria-label="Favourites">${ico('star')}</a><a class="icon" href="#settings" aria-label="Settings">${ico('settings')}</a></header>
-      <p class="eyebrow">${week(-1, 'back', 'Previous week')}<span>${esc(label || (d ? d.occ : ''))}</span><bdi>${d ? esc(d.heb) : ''}</bdi>${week(1, 'forward', 'Next week')}</p><nav class="days" aria-label="Days of the week">${strip}</nav>`;
+      <p class="eyebrow">${week(-1, 'back', 'Previous week')}<span>${esc(label || (d ? d.occ : ''))}</span><bdi>${d ? esc(d.heb) : ''}</bdi>${week(1, 'forward', 'Next week')}</p><nav class="days" aria-label="Days of the week">${strip}</nav><p class="pitch" aria-hidden="true">Two halachot.<br><em>Every day.</em></p>`;
   }
 
   function message(title, sub, actions) {
     shown = null;
+    app.className = 'day';
     app.innerHTML = `${chrome(today(), 'Two Today')}<div class="deck"><section class="card done top"><div class="finish"><h2 class="done-title">${esc(title)}</h2><p>${esc(sub)}</p>${actions}</div></section></div>`;
   }
 
   function welcome() {
+    app.className = '';
     app.innerHTML = `<div class="center"><img src="mark.svg" width="64" height="64" alt=""><h1>Two halachot a day.</h1><p>Short, practical and Sefardi, matched to the Jewish calendar. When should we remind you?</p><input type="time" id="time" value="07:30" aria-label="Reminder time"><button class="primary" data-act="start">Remind me daily</button><button class="link" data-act="skip">Not now</button></div>`;
   }
 
@@ -181,11 +183,13 @@
     if (step <= 1) layers.push(cardHTML(date, d, 1, step === 1 ? 'top' + arrive : 'under'));
     if (step === 0) layers.push(cardHTML(date, d, 0, 'top' + arrive));
     current = step < 2 ? { date, step, key: `${date}/${step}`, card: d.cards[step] } : null;
+    app.className = 'day';
     app.innerHTML = `${chrome(date)}<div class="deck">${layers.join('')}</div>`;
     scrollTo(0, 0);
   }
 
   function page(title, body) {
+    app.className = '';
     app.innerHTML = `<header class="mast">${BACK}</header><div class="page"><h1>${title}</h1>${body}</div>`;
   }
   const row = (date, i, q, ticked) => `<a class="row${ticked ? ' done' : ''}" href="#d/${date}/${i}"><span><span class="mini">${esc(nice(date))}</span><b>${esc(q)}</b></span><span class="tick">${ticked ? '✓' : ''}</span></a>`;
@@ -303,6 +307,13 @@
     else if (act === 'start' || act === 'skip') { if (act === 'start') setReminder(time()); store.set('seen', '1'); route(); }
   });
   app.addEventListener('change', (e) => { if (e.target.id === 'time' && store.get('reminder')) setReminder(e.target.value || '07:30'); });
+
+  // With a keyboard: right arrow turns the card, left arrow brings the first one back.
+  addEventListener('keydown', (e) => {
+    if (!current || e.target.closest('input')) return;
+    if (e.key === 'ArrowRight') fling(-1);
+    else if (e.key === 'ArrowLeft' && current.step) goBack();
+  });
 
   addEventListener('hashchange', route);
   // Coming back to the app (also called by the Android shell): show the new day, or the result of a permission prompt.

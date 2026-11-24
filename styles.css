@@ -7,7 +7,7 @@ button,a{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 button,input{font:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid #e9ffa3;outline-offset:3px}
-#app{max-width:480px;min-height:100vh;min-height:100dvh;margin:auto;display:flex;flex-direction:column}
+#app{width:100%;max-width:480px;min-height:100vh;min-height:100dvh;margin:auto;display:flex;flex-direction:column}
 .mini,.eyebrow,.count{font:10px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.13em}
 
 /* top: name, shortcuts, the week */
@@ -109,8 +109,25 @@ input[type=time]{font-size:28px;padding:10px 16px;border-radius:14px;border:1px 
 .switch[aria-checked=true]::after{transform:translateX(22px);background:#1e341b}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 14px;border-radius:99px;font-size:14px}
 
+/* big screens only: a line of welcome under the week */
+.pitch{display:none;margin:34px 16px 0;font-size:clamp(40px,4.6vw,62px);font-weight:760;letter-spacing:-.075em;line-height:.98}
+.pitch em{font:italic .9em/1 Georgia,serif;letter-spacing:-.05em;color:var(--lime)}
+
 @keyframes deal{from{opacity:0;transform:translateY(16px) scale(.97)}}
 @keyframes return{from{transform:translateX(-120%) rotate(-18deg)}}
 /* short screens: drop the picture and tighten, so the answer fits without scrolling */
 @media(max-height:700px){.mast{min-height:50px}.art{display:none}.q{font-size:27px}.q.sm{font-size:23px}.q.xs{font-size:20px}.answer{font-size:16px;margin-top:10px}.deck{min-height:380px}.controls{padding:8px 14px 10px}}
+/* Tablets, desktops and a phone on its side: the week on the left, the card on the right, both centred. */
+@media(min-width:700px),(orientation:landscape) and (max-height:540px){
+  body{display:flex;min-height:100vh;min-height:100dvh}
+  #app.day{max-width:none;min-height:0;display:grid;grid-template-columns:minmax(250px,380px) minmax(300px,460px);grid-template-rows:auto auto auto 1fr;justify-content:center;column-gap:clamp(12px,4vw,56px);padding:10px 14px}
+  .day .mast,.day .eyebrow,.day .days,.day .pitch{grid-column:1}
+  .day .mast{margin:0}
+  .day .eyebrow{margin:6px -6px 4px}
+  .day .days{margin:0}
+  .day .deck{grid-column:2;grid-row:1/5;margin:0;min-height:0;height:min(680px,calc(100vh - 20px));height:min(680px,calc(100dvh - 20px))}
+}
+@media(min-width:700px) and (min-height:600px){.day .pitch{display:block}}
+/* a phone on its side is short: make the Done card compact so everything on it shows */
+@media(max-height:540px){.finish{gap:7px;padding:12px;overflow-y:auto}.done-badge{width:50px;height:50px;font-size:32px;line-height:50px;box-shadow:0 0 0 6px #dafa8920}.done-title{font-size:30px;max-width:none}.finish .primary{min-height:40px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
