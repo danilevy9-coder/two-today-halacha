@@ -9,6 +9,7 @@ import android.graphics.Insets;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
@@ -79,8 +80,33 @@ public class MainActivity extends Activity {
                 : path.endsWith(".css") ? "text/css" : path.endsWith(".svg") ? "image/svg+xml" : "text/plain";
     }
 
-    void open(Intent intent) {
-        try { startActivity(intent); } catch (Exception ignored) { }
+    /** Opens another screen or app; false when the phone has nothing that can show it. */
+    boolean open(Intent intent) {
+        try { startActivity(intent); return true; } catch (Exception e) { return false; }
+    }
+
+    /** Runs a line of JavaScript in the page. */
+    void tell(String js) {
+        web.evaluateJavascript(js, null);
+    }
+
+    /** This app's notification switches in the phone's settings. */
+    boolean notificationSettings() {
+        return open(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()))
+                || open(appSettings());
+    }
+
+    /** This app's own page in the phone's settings: every phone has one. */
+    Intent appSettings() {
+        return new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+    }
+
+    /** Sends the test reminder, or, when notifications are blocked, opens the setting that unblocks them. The page is told which. */
+    void sendTest() {
+        boolean allowed = Reminder.allowed(this);
+        if (allowed) Reminder.test(this);
+        else notificationSettings();
+        tell("window.onTest && onTest('" + (allowed ? "sent" : "blocked") + "')");
     }
 
     @Override
@@ -101,9 +127,9 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
-        boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
-        if (granted && testWaiting) Reminder.test(this);
+        if (testWaiting) sendTest(); // allowed: the test goes out; refused, or the phone no longer asks: its settings open
         testWaiting = false;
+        tell("window.onAppResume && onAppResume()"); // Settings shows whether notifications are on
     }
 
     /** True when the notification permission still has to be asked for (Android 13 and later). */
@@ -147,7 +173,7 @@ public class MainActivity extends Activity {
             return next == null ? "" : next.toString();
         }
 
-        /** Sends a sample reminder in ten seconds, asking for the notification permission first if needed. */
+        /** Sends test reminders, asking for the notification permission first if needed. The page hears back through onTest(). */
         @JavascriptInterface
         public void testReminder() {
             runOnUiThread(() -> {
@@ -155,19 +181,31 @@ public class MainActivity extends Activity {
                     testWaiting = true;
                     requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
                 } else {
-                    Reminder.test(MainActivity.this);
+                    sendTest();
                 }
             });
         }
 
         @JavascriptInterface
         public boolean notificationsAllowed() {
-            return getSystemService(NotificationManager.class).areNotificationsEnabled();
+            return Reminder.allowed(MainActivity.this);
         }
 
         @JavascriptInterface
-        public void notificationSettings() {
-            open(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
+        public boolean notificationSettings() {
+            return MainActivity.this.notificationSettings();
+        }
+
+        /** One line about this phone for tracing a reminder that did not arrive. */
+        @JavascriptInterface
+        public String status() {
+            MainActivity a = MainActivity.this;
+            String alarm = Reminder.prefs(a).getString("alarmAt", "");
+            return Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
+                    + " · notifications " + (Reminder.allowed(a) ? "on" : "OFF")
+                    + " · on-time alarms " + (Reminder.exactAllowed(a) ? "on" : "OFF")
+                    + " · battery " + (getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "optimised")
+                    + " · last alarm " + (alarm.isEmpty() ? "none yet" : alarm.replace('T', ' '));
         }
 
         @JavascriptInterface
@@ -187,14 +225,10 @@ public class MainActivity extends Activity {
             open(Intent.createChooser(send, null));
         }
 
-        /** Opens the phone's battery settings, where the user can stop it from putting Two Today to sleep. */
+        /** Opens Two Today's page in the phone's settings, where its battery use can be set to unrestricted. */
         @JavascriptInterface
-        public void battery() {
-            try {
-                startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
-            } catch (Exception e) {
-                open(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
-            }
+        public boolean battery() {
+            return open(appSettings());
         }
 
         @JavascriptInterface

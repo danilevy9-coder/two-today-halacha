@@ -7,11 +7,15 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.robolectric.Shadows.shadowOf;
 
+import android.Manifest;
 import android.app.AlarmManager;
+import android.app.Application;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.provider.Settings;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -20,6 +24,7 @@ import java.time.ZoneId;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
@@ -84,13 +89,69 @@ public class AppTest {
         assertNull(text(Reminder.NOTE));
     }
 
-    @Test public void theTestReminderGoesThroughTheAlarm() {
+    @Test public void theTestSendsOneNowAndOneThroughTheAlarm() {
         Reminder.test(c);
+        assertTrue(text(Reminder.TEST_NOTE).startsWith("Test 1 of 2"));
         ShadowAlarmManager.ScheduledAlarm alarm = shadowOf(alarms).peekNextScheduledAlarm();
         assertNotNull(alarm);
-        assertTrue(alarm.getTriggerAtMs() - System.currentTimeMillis() <= 10_000);
+        assertTrue(alarm.getTriggerAtMs() - System.currentTimeMillis() <= 60_000);
         new Reminder().onReceive(c, new Intent(c, Reminder.class).setAction(Reminder.TEST)); // the alarm goes off
+        assertTrue(text(Reminder.TEST_NOTE_2).startsWith("Test 2 of 2"));
+        assertFalse(Reminder.prefs(c).getString("alarmAt", "").isEmpty());
+    }
+
+    // ---- the buttons in Settings, through the same bridge the page uses
+
+    MainActivity.Bridge bridge(MainActivity a) { return a.new Bridge(); }
+    MainActivity app() { return Robolectric.buildActivity(MainActivity.class).setup().get(); }
+
+    @Test public void theTestButtonAsksForPermissionFirst() {
+        MainActivity a = app();
+        bridge(a).testReminder();
+        assertEquals(Manifest.permission.POST_NOTIFICATIONS, shadowOf(a).getLastRequestedPermission().requestedPermissions[0]);
+        assertNull(text(Reminder.TEST_NOTE)); // nothing is sent before the answer
+        shadowOf((Application) c).grantPermissions(Manifest.permission.POST_NOTIFICATIONS);
+        a.onRequestPermissionsResult(2, new String[]{Manifest.permission.POST_NOTIFICATIONS}, new int[]{PackageManager.PERMISSION_GRANTED});
         assertNotNull(text(Reminder.TEST_NOTE));
+    }
+
+    @Test public void aRefusedPermissionOpensThePhonesNotificationSettings() {
+        MainActivity a = app();
+        shadowOf(notes).setNotificationsEnabled(false);
+        bridge(a).testReminder();
+        a.onRequestPermissionsResult(2, new String[]{Manifest.permission.POST_NOTIFICATIONS}, new int[]{PackageManager.PERMISSION_DENIED});
+        assertNull(text(Reminder.TEST_NOTE));
+        assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, shadowOf(a).getNextStartedActivity().getAction());
+        assertFalse(bridge(a).notificationsAllowed());
+    }
+
+    @Test public void withPermissionTheTestGoesStraightOut() {
+        shadowOf((Application) c).grantPermissions(Manifest.permission.POST_NOTIFICATIONS);
+        MainActivity a = app();
+        bridge(a).testReminder();
+        assertNotNull(text(Reminder.TEST_NOTE));
+        assertTrue(bridge(a).notificationsAllowed());
+    }
+
+    @Test public void aBlockedChannelCountsAsOff() {
+        Reminder.notes(c).getNotificationChannel(Reminder.CHANNEL).setImportance(NotificationManager.IMPORTANCE_NONE);
+        assertFalse(Reminder.allowed(c));
+    }
+
+    @Test public void thePhoneSettingsButtonOpensTheAppsOwnPage() {
+        MainActivity a = app();
+        assertTrue(bridge(a).battery());
+        Intent opened = shadowOf(a).getNextStartedActivity();
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, opened.getAction());
+        assertEquals("package:com.twotoday.app", opened.getDataString());
+        assertTrue(bridge(a).status().contains("Android"));
+    }
+
+    @Test public void turningAReminderOnAsksForPermission() {
+        MainActivity a = app();
+        bridge(a).setReminder("07:30");
+        assertEquals(Manifest.permission.POST_NOTIFICATIONS, shadowOf(a).getLastRequestedPermission().requestedPermissions[0]);
+        assertNotNull(shadowOf(alarms).peekNextScheduledAlarm());
     }
 
     @Test public void theAlarmGoingOffSetsTheNextOne() {

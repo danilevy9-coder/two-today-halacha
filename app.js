@@ -205,25 +205,30 @@
     page('Favourites', rows || '<p class="empty">Tap the star on a card to keep it here.</p>');
   }
 
+  let testResult = ''; // what the last test reminder led to: 'sent' or 'blocked'
   function settings() {
     const r = store.get('reminder');
     let body;
     if (A) {
-      const blocked = r && !A.notificationsAllowed(), next = r && A.nextReminder(); // "2026-12-01T07:30"
+      const off = !A.notificationsAllowed(), blocked = r && off, next = r && A.nextReminder(); // "2026-12-01T07:30"
+      const tested = testResult === 'sent' ? `Sent. Look at the top of the screen now. A second test follows through the phone's alarm in ${A.exactAllowed() ? 'about a minute' : 'the next 15 minutes'}; close the app to check that it still arrives.`
+        : testResult === 'blocked' && off ? 'Notifications are off for Two Today. Turn them on in the phone settings, then send the test again.' : '';
       body = `<section class="set"><h2>Daily reminder</h2>
         <p>One reminder a day. None on Shabbat or Yom Tov; on Friday and Erev Yom Tov a late reminder comes at 1:00 pm instead.</p>
         <div class="line"><input type="time" id="time" value="${esc(r || '07:30')}" aria-label="Reminder time"><button class="switch" role="switch" data-act="toggle" aria-checked="${r ? 'true' : 'false'}" aria-label="Daily reminder"></button></div>
         ${next ? `<p>Next reminder: <b>${esc(nice(next.slice(0, 10)))} at ${esc(next.slice(11, 16))}</b>${next.slice(0, 10) > today() && today() < FIRST ? ', when the cards begin' : ''}.</p>` : ''}
         ${blocked ? '<p>Notifications are switched off for Two Today.</p><button class="primary" data-act="notif">Turn notifications on</button>' : ''}
         ${r && !A.exactAllowed() ? '<p>Your phone may deliver the reminder up to an hour late.</p><button class="primary" data-act="exact">Allow on-time reminders</button>' : ''}
-        <button class="ghost" data-act="test">Send a test reminder</button>
-        <button class="ghost" data-act="battery">Reminders not arriving?</button></section>`;
+        <button class="ghost" data-act="test">Send a test reminder</button>${tested ? `<p><b>${esc(tested)}</b></p>` : ''}
+        <p>If reminders do not arrive, open Two Today in the phone's settings and set Battery to Unrestricted. On Xiaomi, Oppo and Huawei phones also allow Autostart.</p>
+        <button class="ghost" data-act="battery">Open phone settings</button></section>`;
       const newApp = +store.get('latestApp') > A.version(), note = store.get('note');
       store.set('note', '');
       body += `<section class="set"><h2>Updates</h2>
         <p>App version ${esc(A.versionName())} · cards version ${A.contentVersion()}. Corrected cards arrive by themselves once a day.</p>
         ${newApp ? `<p><b>A new app version is ready.</b> Download it and tap Install; your settings and progress stay.</p><a class="primary" href="${APK}" target="_blank" rel="noopener">Download the update</a>` : ''}
-        <button class="ghost" data-act="update">Check for updates</button>${note ? `<p><b>${esc(note)}</b></p>` : ''}</section>`;
+        <button class="ghost" data-act="update">Check for updates</button>${note ? `<p><b>${esc(note)}</b></p>` : ''}
+        <p class="fine">${esc(A.status())}</p></section>`;
     } else {
       body = `<section class="set"><h2>Get the Android app</h2><p>A daily reminder at the time you choose, and a home-screen widget.</p><a class="primary" href="${APK}">Download for Android</a></section>`;
     }
@@ -303,11 +308,11 @@
     else if (act === 'prev') goBack();
     else if (act === 'more') past(+b.dataset.n);
     else if (act === 'share') share();
-    else if (act === 'battery') A.battery();
+    else if (act === 'battery') { if (!A.battery()) toast('Could not open the phone settings'); }
     else if (act === 'update') { b.textContent = 'Checking…'; b.disabled = true; A.checkUpdates(); }
-    else if (act === 'test') { A.testReminder(); toast('A test reminder arrives in about 10 seconds'); }
+    else if (act === 'test') { b.textContent = 'Sending…'; A.testReminder(); } // the answer comes back through onTest
     else if (act === 'exact') A.allowExact();
-    else if (act === 'notif') A.notificationSettings();
+    else if (act === 'notif') { if (!A.notificationSettings()) toast('Could not open the phone settings'); }
     else if (act === 'fav') {
       if (!favs.delete(current.key)) favs.add(current.key);
       save('favs', favs);
@@ -323,6 +328,9 @@
     if (e.key === 'ArrowRight') fling(-1);
     else if (e.key === 'ArrowLeft' && current.step) goBack();
   });
+
+  // The Android shell reports back after "Send a test reminder": 'sent', or 'blocked' when notifications are off.
+  window.onTest = (outcome) => { testResult = outcome; if (location.hash === '#settings') settings(); };
 
   // The Android shell reports back after "Check for updates": 'cards' (newer cards downloaded), 'same' or 'error'.
   window.onUpdateChecked = (outcome) => {

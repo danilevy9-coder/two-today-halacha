@@ -22,7 +22,7 @@ public class Reminder extends BroadcastReceiver {
     static final String TEST = "com.twotoday.app.TEST";
     static final String CHANNEL = "reminders";
     static final String OPEN_TODAY = "com.twotoday.app.TODAY";
-    static final int NOTE = 1, TEST_NOTE = 2;
+    static final int NOTE = 1, TEST_NOTE = 2, TEST_NOTE_2 = 3;
     /** Before Shabbat or Yom Tov a later reminder moves up to this time. */
     static final LocalTime EARLY = LocalTime.of(13, 0);
 
@@ -32,8 +32,10 @@ public class Reminder extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context c, Intent i) {
+        boolean alarm = FIRE.equals(i.getAction()) || TEST.equals(i.getAction());
+        if (alarm) prefs(c).edit().putString("alarmAt", LocalDateTime.now().withNano(0).toString()).apply(); // shown in Settings, to trace a missing reminder
         if (FIRE.equals(i.getAction())) show(c, LocalDate.now().toString());
-        if (TEST.equals(i.getAction())) post(c, TEST_NOTE, "This is how your daily reminder will look.");
+        if (TEST.equals(i.getAction())) post(c, TEST_NOTE_2, "Test 2 of 2: the alarm works too. Your daily reminder will arrive like this.");
         schedule(c); // also after a restart, an app update or a clock change
         Widget.refresh(c);
     }
@@ -62,12 +64,32 @@ public class Reminder extends BroadcastReceiver {
         }
     }
 
-    /** "Send a test reminder": a sample notification in ten seconds, through the same alarm the real one uses. */
+    /**
+     * "Send a test reminder": one notification straight away, which shows that notifications are allowed,
+     * and a second a minute later through the same alarm the daily reminder uses, which shows that the alarm arrives.
+     */
     static void test(Context c) {
-        if (!exactAllowed(c)) { post(c, TEST_NOTE, "This is how your daily reminder will look."); return; }
+        post(c, TEST_NOTE, "Test 1 of 2: notifications work. A second test follows in about a minute.");
         PendingIntent fire = PendingIntent.getBroadcast(c, 1, new Intent(c, Reminder.class).setAction(TEST),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        c.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 10_000, fire);
+        AlarmManager alarms = c.getSystemService(AlarmManager.class);
+        long at = System.currentTimeMillis() + 60_000;
+        if (exactAllowed(c)) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, fire);
+        else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, fire);
+    }
+
+    /** The notification manager, with the reminder channel in place. */
+    static NotificationManager notes(Context c) {
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        nm.deleteNotificationChannel("daily"); // the quieter channel of versions before 1.6
+        nm.createNotificationChannel(new NotificationChannel(CHANNEL, c.getString(R.string.channel), NotificationManager.IMPORTANCE_HIGH));
+        return nm;
+    }
+
+    /** False when the phone will not show our notifications: switched off for the app, or for the reminder channel. */
+    static boolean allowed(Context c) {
+        NotificationManager nm = notes(c);
+        return nm.areNotificationsEnabled() && nm.getNotificationChannel(CHANNEL).getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
     /** On Android 14 and later the user has to allow "Alarms & reminders" for on-the-minute delivery. */
@@ -101,10 +123,7 @@ public class Reminder extends BroadcastReceiver {
 
     /** Puts a notification on the screen; tapping it opens today's cards. */
     static void post(Context c, int id, String text) {
-        NotificationManager nm = c.getSystemService(NotificationManager.class);
-        nm.deleteNotificationChannel("daily"); // the quieter channel of versions before 1.6
-        nm.createNotificationChannel(new NotificationChannel(CHANNEL, c.getString(R.string.channel), NotificationManager.IMPORTANCE_HIGH));
-        nm.notify(id, new Notification.Builder(c, CHANNEL)
+        notes(c).notify(id, new Notification.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat)
                 .setColor(c.getColor(R.color.lime))
                 .setContentTitle(c.getString(R.string.app_name))

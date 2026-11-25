@@ -16,7 +16,7 @@ The whole app is three plain files with no build step and no libraries:
 The Android app (`android/`, plain Java, no libraries) is a thin shell around those same files:
 
 - `MainActivity`: one WebView that serves the files from inside the app, plus a small bridge (`Android.get/set/setReminder/share/...`).
-- `Reminder`: the one daily notification. It fires only on days that have a line in `content.txt`; before Shabbat or Yom Tov a late reminder moves to 13:00. It is set again after a restart, an update or a clock change. Settings shows when the next one is due and has "Send a test reminder".
+- `Reminder`: the one daily notification. It fires only on days that have a line in `content.txt`; before Shabbat or Yom Tov a late reminder moves to 13:00. It is set again after a restart, an update or a clock change. Settings shows when the next one is due and has "Send a test reminder": one notification at once and a second through the alarm a minute later. The small grey line at the bottom of Updates (phone, Android version, notifications, alarms, last alarm) is for tracing a reminder that did not arrive.
 - `Widget`: home-screen widget with today's first question.
 - `Updater`: once a day, fetches `content.txt` and `version.txt` from the website, so corrected cards reach phones without a new release. "Check for updates" in Settings does the same check on the spot.
 - `Content`: reads `content.txt`.
